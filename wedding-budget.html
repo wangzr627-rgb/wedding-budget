@@ -331,7 +331,8 @@
     .text-btn,
     .danger-btn,
     .add-category-btn,
-    .calculate-btn {
+    .calculate-btn,
+    .export-btn {
       border: 0;
       cursor: pointer;
       font-weight: 750;
@@ -419,6 +420,33 @@
       margin-left: 18px;
       color: #a99ca0;
       font-size: 12px;
+    }
+
+    .control-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .export-btn {
+      min-width: 150px;
+      padding: 16px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 14px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.09);
+      font-size: 15px;
+    }
+
+    .export-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      transform: translateY(-1px);
+    }
+
+    .export-btn.copied {
+      border-color: rgba(128, 221, 169, 0.55);
+      color: #baf1d0;
+      background: rgba(64, 157, 106, 0.2);
     }
 
     .calculate-btn {
@@ -567,7 +595,9 @@
 
       .grand-total-value { font-size: 22px; }
       .calculated-time { display: none; }
-      .calculate-btn { min-width: 126px; padding: 14px 14px; font-size: 14px; }
+      .control-actions { gap: 7px; }
+      .calculate-btn,
+      .export-btn { min-width: 100px; padding: 14px 9px; font-size: 13px; }
     }
   </style>
 </head>
@@ -695,8 +725,15 @@
         <span class="grand-total-label">婚礼预算总金额</span>
         <strong class="grand-total-value">{{ formatMoney(displayTotal) }}</strong>
       </div>
-      <div>
+      <div class="control-actions">
         <span class="calculated-time" v-if="lastCalculated">上次确认：{{ lastCalculated }}</span>
+        <button
+          class="export-btn"
+          :class="{ copied: copyStatus === '已复制 ✓' }"
+          type="button"
+          aria-live="polite"
+          @click="exportAndCopy"
+        >{{ copyStatus || '导出并复制' }}</button>
         <button
           class="calculate-btn"
           :class="{ pulse: isPulsing }"
@@ -759,6 +796,7 @@
         const displayTotal = ref(grandTotal.value);
         const lastCalculated = ref('');
         const isPulsing = ref(false);
+        const copyStatus = ref('');
 
         const formatMoney = (value) => new Intl.NumberFormat('zh-CN', {
           style: 'currency',
@@ -811,6 +849,72 @@
           });
         };
 
+        const formatDateTime = (date = new Date()) => {
+          const pad = (value) => String(value).padStart(2, '0');
+          return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        };
+
+        const buildExportText = (date = new Date()) => {
+          const lines = [
+            `导出时间：${formatDateTime(date)}`,
+            '婚礼预算明细',
+            '============================'
+          ];
+
+          categories.value.forEach((category, categoryIndex) => {
+            lines.push(`${categoryIndex + 1}、${category.name || '未命名大类'}`);
+            if (category.items.length === 0) {
+              lines.push('  暂无子项目');
+            } else {
+              category.items.forEach((item, itemIndex) => {
+                lines.push(`  ${itemIndex + 1}. ${item.name || '未命名项目'}`);
+                lines.push(`     单价：${formatMoney(item.price)}`);
+                lines.push(`     数量：${safeNumber(item.quantity)}`);
+                lines.push(`     小计：${formatMoney(itemTotal(item))}`);
+              });
+            }
+            lines.push(`  大类合计：${formatMoney(categoryTotal(category))}`, '');
+          });
+
+          lines.push(
+            '============================',
+            `预算大类：${categories.value.length} 个`,
+            `子项目：${itemCount.value} 项`,
+            `最终总金额：${formatMoney(grandTotal.value)}`
+          );
+          return lines.join('\n');
+        };
+
+        const copyToClipboard = async (text) => {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return;
+          }
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          textarea.setSelectionRange(0, textarea.value.length);
+          const copied = document.execCommand('copy');
+          textarea.remove();
+          if (!copied) throw new Error('浏览器未允许复制');
+        };
+
+        const exportAndCopy = async () => {
+          calculate();
+          try {
+            await copyToClipboard(buildExportText());
+            copyStatus.value = '已复制 ✓';
+          } catch (error) {
+            console.warn('复制预算数据失败。', error);
+            copyStatus.value = '复制失败';
+          }
+          window.setTimeout(() => { copyStatus.value = ''; }, 2200);
+        };
+
         const modelContext = document.modelContext;
         if (modelContext?.registerTool) {
           const lifecycle = new AbortController();
@@ -829,6 +933,15 @@
               categoryCount: categories.value.length,
               itemCount: itemCount.value
             })
+          });
+
+          register({
+            name: 'export_budget_text',
+            title: '导出婚礼预算明细',
+            description: '生成包含导出时间、全部大类和子项目、单价、数量、小计与总金额的纯文本。',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            annotations: { readOnlyHint: true, untrustedContentHint: false },
+            execute: () => ({ text: buildExportText() })
           });
 
           register({
@@ -868,6 +981,7 @@
           displayTotal,
           lastCalculated,
           isPulsing,
+          copyStatus,
           itemTotal,
           categoryTotal,
           formatMoney,
@@ -876,7 +990,8 @@
           addCategory,
           removeCategory,
           normalizeNumber,
-          calculate
+          calculate,
+          exportAndCopy
         };
       }
     }).mount('#app');
