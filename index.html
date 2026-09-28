@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="一款简洁易用的婚礼预算规划工具">
+  <title>婚礼预算规划</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%239f2942'/%3E%3Cpath d='M32 49S13 38 13 24c0-9 11-13 19-4 8-9 19-5 19 4 0 14-19 25-19 25Z' fill='%23fff7f3'/%3E%3C/svg%3E">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --bg: #f7f5f3;
+      --surface: #ffffff;
+      --surface-soft: #fbf8f7;
+      --ink: #2b2023;
+      --muted: #756a6d;
+      --line: #e9e1e3;
+      --accent: #9f2942;
+      --accent-dark: #7f1e34;
+      --accent-soft: #fae9ed;
+      --gold: #a9772d;
+      --danger: #a43a3a;
+      --shadow: 0 18px 50px rgba(72, 40, 48, 0.08);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(159, 41, 66, 0.08), transparent 24rem),
+        linear-gradient(180deg, #fbfaf9 0%, var(--bg) 28rem);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+    }
+
+    button, input { font: inherit; }
+
+    button { -webkit-tap-highlight-color: transparent; }
+
+    [v-cloak] { display: none; }
+
+    .app-shell {
+      width: min(1440px, calc(100% - 80px));
+      margin: 0 auto;
+      padding: 48px 0 148px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 34px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Georgia, "Songti SC", serif;
+      font-size: clamp(36px, 4vw, 54px);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+    }
+
+    .intro {
+      max-width: 660px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .overview {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(150px, 1fr));
+      min-width: 520px;
+      padding: 8px;
+      border: 1px solid rgba(159, 41, 66, 0.12);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 12px 35px rgba(72, 40, 48, 0.06);
+      backdrop-filter: blur(14px);
+    }
+
+    .overview-item {
+      padding: 13px 18px;
+      border-right: 1px solid var(--line);
+    }
+
+    .overview-item:last-child { border-right: 0; }
+
+    .overview-label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .overview-value {
+      font-size: 21px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+      gap: 22px;
+    }
+
+    .category-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .category-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 60px rgba(72, 40, 48, 0.11);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(135deg, #fff 0%, var(--surface-soft) 100%);
+    }
+
+    .category-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .category-index {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 11px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .category-name {
+      width: min(240px, 100%);
+      padding: 5px 4px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      outline: none;
+      color: var(--ink);
+      background: transparent;
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    .category-name:hover,
+    .category-name:focus {
+      border-color: var(--line);
+      background: #fff;
+    }
+
+    .category-name:focus { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    .category-total {
+      flex: 0 0 auto;
+      text-align: right;
+    }
+
+    .category-total span {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .category-total strong {
+      color: var(--accent);
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table-head,
+    .item-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 0.85fr) 90px minmax(120px, 0.95fr) 32px;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .table-head {
+      padding: 14px 24px 9px;
+      color: #94898c;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .table-head span:nth-child(4) { text-align: right; }
+
+    .item-list { padding: 0 24px; }
+
+    .item-row {
+      min-height: 62px;
+      border-bottom: 1px solid #f0eaeb;
+    }
+
+    .item-row:last-child { border-bottom: 0; }
+
+    .field-input {
+      width: 100%;
+      min-width: 0;
+      height: 39px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      outline: none;
+      color: var(--ink);
+      background: transparent;
+      transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+    }
+
+    .field-input:hover {
+      border-color: var(--line);
+      background: var(--surface-soft);
+    }
+
+    .field-input:focus {
+      border-color: rgba(159, 41, 66, 0.48);
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .name-input { padding: 0 10px; font-weight: 650; }
+
+    .money-input-wrap { position: relative; }
+
+    .quantity-input-wrap,
+    .row-total-wrap { min-width: 0; }
+
+    .mobile-label { display: none; }
+
+    .money-input-wrap::before {
+      position: absolute;
+      z-index: 1;
+      top: 50%;
+      left: 10px;
+      color: #9b8e91;
+      content: "¥";
+      transform: translateY(-50%);
+    }
+
+    .number-input {
+      padding: 0 10px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .money-input-wrap .number-input { padding-left: 27px; }
+
+    input[type="number"]::-webkit-inner-spin-button { opacity: 0.45; }
+
+    .row-total {
+      overflow: hidden;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .icon-btn {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      place-items: center;
+      border: 0;
+      border-radius: 9px;
+      color: #a39598;
+      background: transparent;
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+
+    .icon-btn:hover { color: var(--danger); background: #fff0f0; }
+    .icon-btn:focus-visible { outline: 3px solid var(--accent-soft); }
+
+    .empty-state {
+      margin: 12px 24px 2px;
+      padding: 24px;
+      border: 1px dashed #ddd2d4;
+      border-radius: 14px;
+      color: var(--muted);
+      text-align: center;
+      background: var(--surface-soft);
+    }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 17px 24px 22px;
+    }
+
+    .text-btn,
+    .danger-btn,
+    .add-category-btn,
+    .calculate-btn {
+      border: 0;
+      cursor: pointer;
+      font-weight: 750;
+      transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+    }
+
+    .text-btn {
+      padding: 10px 15px;
+      border-radius: 11px;
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .text-btn:hover { background: #f6dce2; }
+
+    .danger-btn {
+      padding: 8px 10px;
+      color: #a39598;
+      background: transparent;
+      font-size: 13px;
+    }
+
+    .danger-btn:hover { color: var(--danger); }
+
+    .add-category-wrap { padding: 26px 0 8px; }
+
+    .add-category-btn {
+      width: 100%;
+      padding: 19px 24px;
+      border: 1px dashed rgba(159, 41, 66, 0.4);
+      border-radius: var(--radius);
+      color: var(--accent);
+      background: rgba(255, 255, 255, 0.62);
+      font-size: 16px;
+    }
+
+    .add-category-btn:hover {
+      border-style: solid;
+      background: #fff;
+      box-shadow: var(--shadow);
+      transform: translateY(-1px);
+    }
+
+    .control-bar {
+      position: fixed;
+      z-index: 10;
+      right: 40px;
+      bottom: 30px;
+      left: 40px;
+      display: flex;
+      width: min(940px, calc(100% - 80px));
+      min-width: 900px;
+      margin: 0 auto;
+      padding: 13px 14px 13px 25px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      border-radius: 20px;
+      color: #fff;
+      background: rgba(43, 32, 35, 0.94);
+      box-shadow: 0 24px 65px rgba(43, 32, 35, 0.28);
+      backdrop-filter: blur(18px);
+    }
+
+    .grand-total-label {
+      display: block;
+      margin-bottom: 3px;
+      color: #c9bdc0;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .grand-total-value {
+      display: block;
+      font-family: Georgia, "Songti SC", serif;
+      font-size: 29px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .calculated-time {
+      margin-left: 18px;
+      color: #a99ca0;
+      font-size: 12px;
+    }
+
+    .calculate-btn {
+      min-width: 190px;
+      padding: 17px 25px;
+      border-radius: 14px;
+      color: #fff;
+      background: var(--accent);
+      box-shadow: 0 10px 25px rgba(159, 41, 66, 0.34);
+      font-size: 16px;
+    }
+
+    .calculate-btn:hover {
+      background: #b0304d;
+      transform: translateY(-1px);
+    }
+
+    .calculate-btn:active { transform: scale(0.98); }
+
+    .calculate-btn.pulse { animation: pulse 420ms ease; }
+
+    @keyframes pulse {
+      50% { box-shadow: 0 0 0 9px rgba(255, 255, 255, 0.16), 0 10px 25px rgba(159, 41, 66, 0.34); }
+    }
+
+    .fade-enter-active, .fade-leave-active { transition: opacity 160ms ease, transform 160ms ease; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-5px); }
+
+    @media (max-width: 1240px) {
+      .app-shell { width: calc(100% - 48px); }
+      .topbar { align-items: flex-start; }
+      .overview { min-width: 470px; }
+      .table-head, .item-row { grid-template-columns: minmax(120px, 1.3fr) 110px 80px 110px 32px; }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        width: calc(100% - 32px);
+        padding-top: 30px;
+      }
+
+      .topbar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 22px;
+      }
+
+      .overview { min-width: 0; width: 100%; }
+      .category-grid { grid-template-columns: 1fr; }
+
+      .control-bar {
+        right: 16px;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: 16px;
+        width: calc(100% - 32px);
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 16px; }
+
+      .app-shell {
+        width: calc(100% - 24px);
+        padding: 24px 0 178px;
+      }
+
+      h1 { font-size: 37px; }
+      .intro { margin-top: 10px; font-size: 15px; }
+
+      .overview {
+        grid-template-columns: 0.7fr 0.7fr 1.35fr;
+        padding: 5px;
+      }
+
+      .overview-item { padding: 10px 8px; }
+      .overview-label { font-size: 11px; }
+      .overview-value { font-size: 16px; }
+
+      .category-grid { gap: 16px; }
+      .category-card { border-radius: 16px; }
+      .category-card:hover { transform: none; }
+
+      .card-head {
+        align-items: flex-start;
+        padding: 17px 16px 15px;
+      }
+
+      .category-title-wrap { gap: 8px; }
+      .category-index { width: 30px; height: 30px; }
+      .category-name { width: 100%; font-size: 17px; }
+      .category-total strong { font-size: 17px; }
+
+      .table-head { display: none; }
+      .item-list { padding: 5px 16px 0; }
+
+      .item-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) 32px;
+        gap: 10px;
+        padding: 14px 0;
+      }
+
+      .name-input { grid-column: 1 / 3; background: var(--surface-soft); }
+      .money-input-wrap { grid-column: 1; }
+      .money-input-wrap::before { top: auto; bottom: 12px; transform: none; }
+      .quantity-input-wrap { grid-column: 2; }
+      .icon-btn { grid-column: 3; grid-row: 1; }
+      .row-total-wrap { grid-column: 1 / 4; }
+
+      .mobile-label {
+        display: block;
+        margin: 0 0 5px 2px;
+        color: #94898c;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .field-input {
+        height: 44px;
+        border-color: var(--line);
+        background: var(--surface-soft);
+      }
+
+      .row-total {
+        display: block;
+        padding-top: 2px;
+        color: var(--accent);
+        text-align: left;
+        font-size: 18px;
+      }
+
+      .card-actions { padding: 12px 16px 17px; }
+      .text-btn { min-height: 44px; }
+      .danger-btn { min-height: 44px; }
+
+      .control-bar {
+        right: 12px;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        left: 12px;
+        width: calc(100% - 24px);
+        gap: 12px;
+        padding: 11px 11px 11px 16px;
+        border-radius: 17px;
+      }
+
+      .grand-total-value { font-size: 22px; }
+      .calculated-time { display: none; }
+      .calculate-btn { min-width: 126px; padding: 14px 14px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="app" v-cloak>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Wedding Budget Planner</p>
+          <h1>婚礼预算规划</h1>
+          <p class="intro">按大类拆分每一笔花费，调整单价与数量后，所有小计和总预算都会实时更新。</p>
+        </div>
+
+        <section class="overview" aria-label="预算概览">
+          <div class="overview-item">
+            <span class="overview-label">预算大类</span>
+            <strong class="overview-value">{{ categories.length }}</strong>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">子项目</span>
+            <strong class="overview-value">{{ itemCount }}</strong>
+          </div>
+          <div class="overview-item">
+            <span class="overview-label">当前总计</span>
+            <strong class="overview-value">{{ formatMoney(grandTotal) }}</strong>
+          </div>
+        </section>
+      </header>
+
+      <section class="category-grid" aria-label="婚礼预算项目">
+        <article class="category-card" v-for="(category, categoryIndex) in categories" :key="category.id">
+          <header class="card-head">
+            <div class="category-title-wrap">
+              <span class="category-index">{{ String(categoryIndex + 1).padStart(2, '0') }}</span>
+              <input
+                class="category-name"
+                v-model.trim="category.name"
+                :aria-label="`第 ${categoryIndex + 1} 个大类名称`"
+                maxlength="30"
+              >
+            </div>
+            <div class="category-total">
+              <span>大类合计</span>
+              <strong>{{ formatMoney(categoryTotal(category)) }}</strong>
+            </div>
+          </header>
+
+          <div class="table-head" aria-hidden="true">
+            <span>项目名称</span>
+            <span>单价（元）</span>
+            <span>数量</span>
+            <span>项目总价</span>
+            <span></span>
+          </div>
+
+          <transition-group name="fade" tag="div" class="item-list">
+            <div class="item-row" v-for="(item, itemIndex) in category.items" :key="item.id">
+              <input
+                class="field-input name-input"
+                v-model.trim="item.name"
+                :aria-label="`${category.name}第 ${itemIndex + 1} 个项目名称`"
+                placeholder="请输入项目名称"
+                maxlength="30"
+              >
+              <div class="money-input-wrap">
+                <span class="mobile-label">单价（元）</span>
+                <input
+                  class="field-input number-input"
+                  v-model.number="item.price"
+                  type="number"
+                  min="0"
+                  step="100"
+                  inputmode="decimal"
+                  :aria-label="`${item.name || '未命名项目'}单价`"
+                  @blur="normalizeNumber(item, 'price')"
+                >
+              </div>
+              <div class="quantity-input-wrap">
+                <span class="mobile-label">数量</span>
+                <input
+                  class="field-input number-input"
+                  v-model.number="item.quantity"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="decimal"
+                  :aria-label="`${item.name || '未命名项目'}数量`"
+                  @blur="normalizeNumber(item, 'quantity')"
+                >
+              </div>
+              <div class="row-total-wrap">
+                <span class="mobile-label">项目总价</span>
+                <span class="row-total">{{ formatMoney(itemTotal(item)) }}</span>
+              </div>
+              <button
+                class="icon-btn"
+                type="button"
+                :aria-label="`删除${item.name || '该项目'}`"
+                title="删除子项目"
+                @click="removeItem(category, item.id)"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </transition-group>
+
+          <p class="empty-state" v-if="category.items.length === 0">还没有子项目，从下面添加一项吧。</p>
+
+          <footer class="card-actions">
+            <button class="text-btn" type="button" @click="addItem(category)">＋ 添加子项目</button>
+            <button class="danger-btn" type="button" @click="removeCategory(category.id)">删除大类</button>
+          </footer>
+        </article>
+      </section>
+
+      <div class="add-category-wrap">
+        <button class="add-category-btn" type="button" @click="addCategory">＋ 添加新大类</button>
+      </div>
+    </div>
+
+    <aside class="control-bar" aria-label="总金额控制面板">
+      <div>
+        <span class="grand-total-label">婚礼预算总金额</span>
+        <strong class="grand-total-value">{{ formatMoney(displayTotal) }}</strong>
+      </div>
+      <div>
+        <span class="calculated-time" v-if="lastCalculated">上次确认：{{ lastCalculated }}</span>
+        <button
+          class="calculate-btn"
+          :class="{ pulse: isPulsing }"
+          type="button"
+          @click="calculate"
+        >计算总金额</button>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const { createApp, computed, onBeforeUnmount, ref, watch } = Vue;
+
+    createApp({
+      setup() {
+        const STORAGE_KEY = 'wedding-budget-planner-v1';
+        let nextId = 100;
+        const makeItem = (name) => ({ id: nextId++, name, price: 0, quantity: 1 });
+
+        const createDefaultCategories = () => ([
+          { id: nextId++, name: '餐饮酒水', items: ['婚宴桌席', '喜烟', '喜酒'].map(makeItem) },
+          { id: nextId++, name: '互动体验', items: ['现场绘画', 'Photo Booth', '室内乐队'].map(makeItem) },
+          { id: nextId++, name: '布置与影像', items: ['场地布置', '请柬喜糖', '司仪', '摄影跟拍'].map(makeItem) },
+          { id: nextId++, name: '女方亲戚招待', items: ['住宿', '日常餐饮', '零星开销'].map(makeItem) },
+          { id: nextId++, name: '婚纱', items: ['婚纱照', '婚纱视频', '现场婚纱', '现场西服'].map(makeItem) },
+          { id: nextId++, name: '改口费', items: ['改口红包'].map(makeItem) }
+        ]);
+
+        let initialCategories = createDefaultCategories();
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (Array.isArray(saved) && saved.length > 0) {
+            initialCategories = saved;
+            const allIds = saved.flatMap((category) => [category.id, ...(category.items || []).map((item) => item.id)]);
+            nextId = Math.max(nextId, ...allIds.filter(Number.isFinite)) + 1;
+          }
+        } catch (error) {
+          console.warn('未能读取本机保存的预算，将使用默认数据。', error);
+        }
+
+        const categories = ref(initialCategories);
+
+        watch(categories, (value) => {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+          } catch (error) {
+            console.warn('未能在本机保存预算。', error);
+          }
+        }, { deep: true });
+
+        const safeNumber = (value) => {
+          const number = Number(value);
+          return Number.isFinite(number) && number >= 0 ? number : 0;
+        };
+
+        const itemTotal = (item) => safeNumber(item.price) * safeNumber(item.quantity);
+        const categoryTotal = (category) => category.items.reduce((sum, item) => sum + itemTotal(item), 0);
+        const grandTotal = computed(() => categories.value.reduce((sum, category) => sum + categoryTotal(category), 0));
+        const itemCount = computed(() => categories.value.reduce((sum, category) => sum + category.items.length, 0));
+        const displayTotal = ref(grandTotal.value);
+        const lastCalculated = ref('');
+        const isPulsing = ref(false);
+
+        const formatMoney = (value) => new Intl.NumberFormat('zh-CN', {
+          style: 'currency',
+          currency: 'CNY',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(safeNumber(value));
+
+        const addItem = (category) => {
+          category.items.push(makeItem('新子项目'));
+        };
+
+        const removeItem = (category, itemId) => {
+          category.items = category.items.filter((item) => item.id !== itemId);
+        };
+
+        const addCategory = () => {
+          categories.value.push({
+            id: nextId++,
+            name: '新大类',
+            items: [makeItem('新子项目')]
+          });
+          requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+        };
+
+        const removeCategory = (categoryId) => {
+          const category = categories.value.find((entry) => entry.id === categoryId);
+          if (!category) return;
+          const confirmed = window.confirm(`确定删除“${category.name || '未命名大类'}”及其全部子项目吗？`);
+          if (confirmed) categories.value = categories.value.filter((entry) => entry.id !== categoryId);
+        };
+
+        const normalizeNumber = (item, field) => {
+          item[field] = safeNumber(item[field]);
+        };
+
+        const calculate = () => {
+          categories.value.forEach((category) => {
+            category.items.forEach((item) => {
+              item.price = safeNumber(item.price);
+              item.quantity = safeNumber(item.quantity);
+            });
+          });
+          displayTotal.value = grandTotal.value;
+          lastCalculated.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          isPulsing.value = false;
+          requestAnimationFrame(() => {
+            isPulsing.value = true;
+            window.setTimeout(() => { isPulsing.value = false; }, 450);
+          });
+        };
+
+        const modelContext = document.modelContext;
+        if (modelContext?.registerTool) {
+          const lifecycle = new AbortController();
+          const register = (tool) => Promise.resolve(
+            modelContext.registerTool(tool, { signal: lifecycle.signal })
+          ).catch((error) => console.warn('页面智能工具注册失败。', error));
+
+          register({
+            name: 'read_budget_summary',
+            title: '读取婚礼预算汇总',
+            description: '读取当前页面中的婚礼预算总金额、分类数量和子项目数量，不修改任何数据。',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            annotations: { readOnlyHint: true, untrustedContentHint: false },
+            execute: () => ({
+              total: grandTotal.value,
+              categoryCount: categories.value.length,
+              itemCount: itemCount.value
+            })
+          });
+
+          register({
+            name: 'update_budget_item',
+            title: '更新婚礼预算项目',
+            description: '按照大类名称和子项目名称更新单价与数量，并同步更新页面和本机保存的数据。',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                categoryName: { type: 'string' },
+                itemName: { type: 'string' },
+                price: { type: 'number', minimum: 0 },
+                quantity: { type: 'number', minimum: 0 }
+              },
+              required: ['categoryName', 'itemName', 'price', 'quantity'],
+              additionalProperties: false
+            },
+            annotations: { readOnlyHint: false, untrustedContentHint: false },
+            execute: ({ categoryName, itemName, price, quantity }) => {
+              const category = categories.value.find((entry) => entry.name === categoryName);
+              const item = category?.items.find((entry) => entry.name === itemName);
+              if (!item) throw new Error('未找到指定的大类或子项目。');
+              item.price = safeNumber(price);
+              item.quantity = safeNumber(quantity);
+              displayTotal.value = grandTotal.value;
+              return { categoryName, itemName, subtotal: itemTotal(item), total: grandTotal.value };
+            }
+          });
+
+          onBeforeUnmount(() => lifecycle.abort());
+        }
+
+        return {
+          categories,
+          itemCount,
+          grandTotal,
+          displayTotal,
+          lastCalculated,
+          isPulsing,
+          itemTotal,
+          categoryTotal,
+          formatMoney,
+          addItem,
+          removeItem,
+          addCategory,
+          removeCategory,
+          normalizeNumber,
+          calculate
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
