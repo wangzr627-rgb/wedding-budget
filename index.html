@@ -332,7 +332,9 @@
     .danger-btn,
     .add-category-btn,
     .calculate-btn,
-    .export-btn {
+    .export-btn,
+    .import-btn,
+    .modal-btn {
       border: 0;
       cursor: pointer;
       font-weight: 750;
@@ -449,6 +451,77 @@
       background: rgba(64, 157, 106, 0.2);
     }
 
+    .import-btn {
+      min-width: 150px;
+      padding: 16px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 14px;
+      color: #fff;
+      background: rgba(169, 119, 45, 0.24);
+      font-size: 15px;
+    }
+
+    .import-btn:hover {
+      background: rgba(169, 119, 45, 0.38);
+      transform: translateY(-1px);
+    }
+
+    .import-btn.imported {
+      border-color: rgba(128, 221, 169, 0.55);
+      color: #baf1d0;
+      background: rgba(64, 157, 106, 0.2);
+    }
+
+    .import-overlay {
+      position: fixed;
+      z-index: 40;
+      inset: 0;
+      display: grid;
+      padding: 20px;
+      place-items: center;
+      background: rgba(32, 22, 25, 0.68);
+      backdrop-filter: blur(8px);
+    }
+
+    .import-dialog {
+      width: min(620px, 100%);
+      padding: 24px;
+      border-radius: 20px;
+      color: var(--ink);
+      background: #fff;
+      box-shadow: 0 28px 80px rgba(24, 15, 18, 0.34);
+    }
+
+    .import-dialog h2 { margin: 0 0 8px; font-size: 22px; }
+    .import-dialog p { margin: 0 0 16px; color: var(--muted); line-height: 1.6; }
+
+    .import-textarea {
+      width: 100%;
+      min-height: 260px;
+      padding: 14px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      outline: none;
+      color: var(--ink);
+      background: var(--surface-soft);
+      line-height: 1.55;
+    }
+
+    .import-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .import-error { margin-top: 10px !important; color: var(--danger) !important; font-size: 14px; }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .modal-btn { padding: 12px 18px; border-radius: 11px; }
+    .modal-btn.secondary { color: var(--muted); background: #f2eeee; }
+    .modal-btn.primary { color: #fff; background: var(--accent); }
+
     .calculate-btn {
       min-width: 190px;
       padding: 17px 25px;
@@ -511,7 +584,7 @@
 
       .app-shell {
         width: calc(100% - 24px);
-        padding: 24px 0 178px;
+        padding: 24px 0 232px;
       }
 
       h1 { font-size: 37px; }
@@ -591,13 +664,23 @@
         gap: 12px;
         padding: 11px 11px 11px 16px;
         border-radius: 17px;
+        display: grid;
+        grid-template-columns: 1fr;
       }
 
       .grand-total-value { font-size: 22px; }
       .calculated-time { display: none; }
-      .control-actions { gap: 7px; }
+      .control-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+      }
       .calculate-btn,
-      .export-btn { min-width: 100px; padding: 14px 9px; font-size: 13px; }
+      .export-btn,
+      .import-btn { min-width: 0; padding: 13px 7px; font-size: 13px; }
+
+      .import-dialog { padding: 20px 16px; border-radius: 17px; }
+      .import-textarea { min-height: 230px; }
     }
   </style>
 </head>
@@ -728,6 +811,13 @@
       <div class="control-actions">
         <span class="calculated-time" v-if="lastCalculated">上次确认：{{ lastCalculated }}</span>
         <button
+          class="import-btn"
+          :class="{ imported: importStatus === '导入成功 ✓' }"
+          type="button"
+          aria-live="polite"
+          @click="pasteAndImport"
+        >{{ importStatus || '粘贴并覆盖' }}</button>
+        <button
           class="export-btn"
           :class="{ copied: copyStatus === '已复制 ✓' }"
           type="button"
@@ -742,6 +832,25 @@
         >计算总金额</button>
       </div>
     </aside>
+
+    <div class="import-overlay" v-if="showImportDialog" @click.self="closeImportDialog">
+      <section class="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
+        <h2 id="import-title">粘贴预算数据</h2>
+        <p>请粘贴由“导出并复制”生成的完整文字。确认后会覆盖当前设备上的预算数据。</p>
+        <textarea
+          class="import-textarea"
+          v-model="manualImportText"
+          aria-label="待导入的预算文字"
+          placeholder="在这里粘贴婚礼预算明细……"
+          autofocus
+        ></textarea>
+        <p class="import-error" v-if="importError">{{ importError }}</p>
+        <div class="dialog-actions">
+          <button class="modal-btn secondary" type="button" @click="closeImportDialog">取消</button>
+          <button class="modal-btn primary" type="button" @click="confirmManualImport">确认覆盖导入</button>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script>
@@ -758,15 +867,37 @@
           { id: nextId++, name: '互动体验', items: ['现场绘画', 'Photo Booth', '室内乐队'].map(makeItem) },
           { id: nextId++, name: '布置与影像', items: ['场地布置', '请柬喜糖', '司仪', '摄影跟拍'].map(makeItem) },
           { id: nextId++, name: '女方亲戚招待', items: ['住宿', '日常餐饮', '零星开销'].map(makeItem) },
-          { id: nextId++, name: '婚纱', items: ['婚纱照', '婚纱视频', '现场婚纱', '现场西服'].map(makeItem) },
+          { id: nextId++, name: '婚庆服饰', items: ['婚纱照', '婚纱视频', '现场婚纱', '现场西服', '父母服饰'].map(makeItem) },
           { id: nextId++, name: '改口费', items: ['改口红包'].map(makeItem) }
         ]);
+
+        const migrateApparelCategory = (list) => {
+          let current = list.find((category) => category.name === '婚庆服饰');
+          const legacy = list.find((category) => category.name === '婚纱');
+          if (!current && legacy) {
+            legacy.name = '婚庆服饰';
+            current = legacy;
+          } else if (current && legacy && current !== legacy) {
+            const existingNames = new Set((current.items || []).map((item) => item.name));
+            (legacy.items || []).forEach((item) => {
+              if (!existingNames.has(item.name)) current.items.push(item);
+            });
+            list.splice(list.indexOf(legacy), 1);
+          }
+          if (current) {
+            current.items ||= [];
+            if (!current.items.some((item) => item.name === '父母服饰')) {
+              current.items.push(makeItem('父母服饰'));
+            }
+          }
+          return list;
+        };
 
         let initialCategories = createDefaultCategories();
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
           if (Array.isArray(saved) && saved.length > 0) {
-            initialCategories = saved;
+            initialCategories = migrateApparelCategory(saved);
             const allIds = saved.flatMap((category) => [category.id, ...(category.items || []).map((item) => item.id)]);
             nextId = Math.max(nextId, ...allIds.filter(Number.isFinite)) + 1;
           }
@@ -797,6 +928,10 @@
         const lastCalculated = ref('');
         const isPulsing = ref(false);
         const copyStatus = ref('');
+        const importStatus = ref('');
+        const showImportDialog = ref(false);
+        const manualImportText = ref('');
+        const importError = ref('');
 
         const formatMoney = (value) => new Intl.NumberFormat('zh-CN', {
           style: 'currency',
@@ -858,6 +993,7 @@
           const lines = [
             `导出时间：${formatDateTime(date)}`,
             '婚礼预算明细',
+            '格式版本：1',
             '============================'
           ];
 
@@ -915,6 +1051,95 @@
           window.setTimeout(() => { copyStatus.value = ''; }, 2200);
         };
 
+        const parseExportText = (text) => {
+          if (typeof text !== 'string' || !text.includes('婚礼预算明细')) {
+            throw new Error('没有识别到“婚礼预算明细”，请粘贴完整的导出文字。');
+          }
+
+          const parsed = [];
+          let currentCategory = null;
+          let currentItem = null;
+
+          text.replace(/\r\n?/g, '\n').split('\n').forEach((line) => {
+            const categoryMatch = line.match(/^(\d+)、(.+)$/);
+            const itemMatch = line.match(/^\s+(\d+)\.\s+(.+)$/);
+            const priceMatch = line.match(/^\s*单价：(.+)$/);
+            const quantityMatch = line.match(/^\s*数量：(.+)$/);
+
+            if (categoryMatch) {
+              currentCategory = { id: nextId++, name: categoryMatch[2].trim(), items: [] };
+              parsed.push(currentCategory);
+              currentItem = null;
+            } else if (itemMatch && currentCategory) {
+              currentItem = {
+                id: nextId++,
+                name: itemMatch[2].trim(),
+                price: 0,
+                quantity: 1
+              };
+              currentCategory.items.push(currentItem);
+            } else if (priceMatch && currentItem) {
+              currentItem.price = safeNumber(priceMatch[1].replace(/[^\d.-]/g, ''));
+            } else if (quantityMatch && currentItem) {
+              currentItem.quantity = safeNumber(quantityMatch[1].replace(/[^\d.-]/g, ''));
+            }
+          });
+
+          if (parsed.length === 0 || parsed.every((category) => category.items.length === 0)) {
+            throw new Error('未识别到可导入的大类和子项目，请确认文字没有被截断。');
+          }
+          return migrateApparelCategory(parsed);
+        };
+
+        const importFromText = (text) => {
+          const imported = parseExportText(text);
+          categories.value = imported;
+          displayTotal.value = imported.reduce((sum, category) => sum + categoryTotal(category), 0);
+          lastCalculated.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          return {
+            categoryCount: imported.length,
+            itemCount: imported.reduce((sum, category) => sum + category.items.length, 0),
+            total: displayTotal.value
+          };
+        };
+
+        const markImportSuccess = () => {
+          importStatus.value = '导入成功 ✓';
+          window.setTimeout(() => { importStatus.value = ''; }, 2200);
+        };
+
+        const closeImportDialog = () => {
+          showImportDialog.value = false;
+          importError.value = '';
+        };
+
+        const pasteAndImport = async () => {
+          let pastedText = '';
+          try {
+            if (!navigator.clipboard?.readText || !window.isSecureContext) {
+              throw new Error('当前浏览器不支持直接读取剪贴板。');
+            }
+            pastedText = await navigator.clipboard.readText();
+            if (!pastedText.trim()) throw new Error('剪贴板中没有文字。');
+            importFromText(pastedText);
+            markImportSuccess();
+          } catch (error) {
+            manualImportText.value = pastedText;
+            importError.value = pastedText ? error.message : '';
+            showImportDialog.value = true;
+          }
+        };
+
+        const confirmManualImport = () => {
+          try {
+            importFromText(manualImportText.value);
+            closeImportDialog();
+            markImportSuccess();
+          } catch (error) {
+            importError.value = error.message;
+          }
+        };
+
         const modelContext = document.modelContext;
         if (modelContext?.registerTool) {
           const lifecycle = new AbortController();
@@ -942,6 +1167,20 @@
             inputSchema: { type: 'object', properties: {}, additionalProperties: false },
             annotations: { readOnlyHint: true, untrustedContentHint: false },
             execute: () => ({ text: buildExportText() })
+          });
+
+          register({
+            name: 'import_budget_text',
+            title: '导入并覆盖婚礼预算',
+            description: '解析由本页面导出的完整预算文字，并用其中的大类、项目、单价和数量覆盖当前预算。',
+            inputSchema: {
+              type: 'object',
+              properties: { text: { type: 'string', minLength: 1 } },
+              required: ['text'],
+              additionalProperties: false
+            },
+            annotations: { readOnlyHint: false, untrustedContentHint: true },
+            execute: ({ text }) => importFromText(text)
           });
 
           register({
@@ -982,6 +1221,10 @@
           lastCalculated,
           isPulsing,
           copyStatus,
+          importStatus,
+          showImportDialog,
+          manualImportText,
+          importError,
           itemTotal,
           categoryTotal,
           formatMoney,
@@ -991,7 +1234,10 @@
           removeCategory,
           normalizeNumber,
           calculate,
-          exportAndCopy
+          exportAndCopy,
+          pasteAndImport,
+          closeImportDialog,
+          confirmManualImport
         };
       }
     }).mount('#app');
